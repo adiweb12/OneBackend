@@ -1,1 +1,30 @@
+services:
+  - type: web
+    name: onechat-backend
+    env: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: onechat-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: GIN_MODE
+        value: release
 
+databases:
+  - name: onechat-db
+    databaseName: onechat
+    user: onechat
+    plan: free
+    region: oregon
