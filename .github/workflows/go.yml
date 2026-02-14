@@ -1,0 +1,36 @@
+name: Fix Go Dependencies
+
+on:
+  push:
+    branches: [ main ]  # Runs every time you push to the main branch
+  workflow_dispatch:     # Allows you to run it manually from the "Actions" tab
+
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    # Required to push the fixed file back to your repo
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: false   # Disable cache to ensure a fresh tidy
+
+      - name: Run go mod tidy
+        working-directory: ./backend  # Important: ensures it runs in the backend folder
+        run: |
+          go mod tidy
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add backend/go.sum
+          # Only commit if there are changes
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: auto-generate go.sum"
+          git push
