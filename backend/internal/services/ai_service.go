@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings" // Added strings package
 	"time"
 )
 
@@ -74,31 +75,24 @@ func (s *AIService) ExtractEvent(messageText string) (*EventExtraction, error) {
 
 	prompt := fmt.Sprintf(`Extract event information from the following text and return ONLY a valid JSON object with these fields:
 - title: event name or description
-- date: date in YYYY-MM-DD format (use context clues for year if not specified, default to current/next year)
-- time: time in HH:MM format (24-hour), or "00:00" if not specified
+- date: date in YYYY-MM-DD format
+- time: time in HH:MM format
 - location: location or "Not specified"
 - description: brief description or empty string
 
 Text: "%s"
 
-Return ONLY the JSON object, no other text.
-
-Example output:
-{"title":"Team Meeting","date":"2026-02-15","time":"14:00","location":"Conference Room A","description":"Weekly team sync"}`, messageText)
+Return ONLY the JSON object.`, messageText)
 
 	response, err := s.callGemini(prompt)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse JSON response
 	var event EventExtraction
-	if err := json.Unmarshal([]byte(response), &event); err != nil {
-		// Try to clean the response
-		response = cleanJSONResponse(response)
-		if err := json.Unmarshal([]byte(response), &event); err != nil {
-			return nil, fmt.Errorf("failed to parse event data: %w", err)
-		}
+	cleanRes := cleanJSONResponse(response)
+	if err := json.Unmarshal([]byte(cleanRes), &event); err != nil {
+		return nil, fmt.Errorf("failed to parse event data: %w", err)
 	}
 
 	return &event, nil
@@ -108,13 +102,7 @@ func (s *AIService) callGemini(prompt string) (string, error) {
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", s.apiKey)
 
 	reqBody := GeminiRequest{
-		Contents: []GeminiContent{
-			{
-				Parts: []GeminiPart{
-					{Text: prompt},
-				},
-			},
-		},
+		Contents: []GeminiContent{{Parts: []GeminiPart{{Text: prompt}}}},
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -128,7 +116,6 @@ func (s *AIService) callGemini(prompt string) (string, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return "", err
@@ -137,7 +124,7 @@ func (s *AIService) callGemini(prompt string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("Gemini API error: %s - %s", resp.Status, string(body))
+		return "", fmt.Errorf("Gemini API error: %s", string(body))
 	}
 
 	var geminiResp GeminiResponse
@@ -153,9 +140,9 @@ func (s *AIService) callGemini(prompt string) (string, error) {
 }
 
 func cleanJSONResponse(response string) string {
-	// Remove markdown code blocks if present
-	response = bytes.TrimPrefix([]byte(response), []byte("```json"))
-	response = bytes.TrimPrefix(response, []byte("```"))
-	response = bytes.TrimSuffix(response, []byte("```"))
-	return string(bytes.TrimSpace(response))
+	// Fixed: Using strings instead of bytes for string manipulation
+	response = strings.TrimPrefix(response, "```json")
+	response = strings.TrimPrefix(response, "```")
+	response = strings.TrimSuffix(response, "```")
+	return strings.TrimSpace(response)
 }
